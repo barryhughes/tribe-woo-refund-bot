@@ -13,20 +13,26 @@ add_action( 'woocommerce_order_status_changed', function( $order_id, $old_status
 
 	if ( 0 == $order_id || 'refunded' !== $new_status ) return;
 
-	$children = get_children([
+	// Get the refund data (amount and reason, if it exists)
+	$refunds = get_children( [
 		'post_parent' => $order_id,
 		'post_type'   => 'shop_order_refund',
 		'numberposts' => -1,
 		'post_status' => 'any'
 	], OBJECT );
 
-	$refunds = array_values( $children );
+	// Placeholders in case we don't yet have the reason/amount data
+	$no_info_yet = (object) [
+		'post_excerpt'   => 'The status has changed to refunded but the reason has not yet been provided!',
+		'_refund_amount' => '0.00 (unknown)'
+	];
 
-	$meta = get_post_meta( $order_id );
-	
-	$first_name = ! empty( $meta['_billing_first_name'][0] ) ? ucfirst( $meta['_billing_first_name'][0] ) : '#' . $order_id;
-	$last_name  = ! empty( $meta['_billing_first_name'][0] ) && ! empty( $meta['_billing_last_name'][0] ) ? ucfirst( $meta['_billing_last_name'][0] ) : '';
-	$refunder   = get_the_author_meta( 'user_nicename', $refunds[0]->post_author );
+	// Use our placeholder or the real refund reason data as appropriate
+	$refund = empty( $refunds )
+		? $no_info_yet // ie, status has been changed but the refund amount/reason not set
+		: array_shift( array_values( $refunds ) );
+
+	$order_meta = get_post_meta( $order_id );
 
 	$payload = [
 		'username'    => 'Tribe Refunds',
@@ -38,18 +44,18 @@ add_action( 'woocommerce_order_status_changed', function( $order_id, $old_status
 				'fallback'   => '',
 				'color'      => '#A46497',
 				'pretext'    => '',
-				'title'      => sprintf( '$%s refunded for order #%s',  get_post_meta( $refunds[0]->ID, '_refund_amount', true ), $order_id ),
+				'title'      => sprintf( '$%s refunded for order #%s', $refund->_refund_amount, $order_id ),
 				'title_link' => get_edit_post_link( $order_id ),
-				'text'       => sprintf( '%s', $refunds[0]->post_excerpt ),
+				'text'       => sprintf( '%s', $refund->post_excerpt ),
 				'fields'     => [
 					[
 						'title' => 'Customer',
-						'value' => sprintf( '%s %s', $first_name, $last_name ),
+						'value' => sprintf( '%s %s', ucfirst( $order_meta['_billing_first_name'][0] ), ucfirst( $order_meta['_billing_last_name'][0] ) ),
 						'short' => true
 					],
 					[
 						'title' => 'Refunded By',
-						'value' => ! empty( $refunder ) ? ucfirst( $refunder ) : 'Tribe',
+						'value' => ucfirst( get_the_author_meta( 'user_nicename', $refunds[0]->post_author ) ),
 						'short' => true
 					]
 				]
