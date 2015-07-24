@@ -13,16 +13,20 @@ add_action( 'woocommerce_order_status_changed', function( $order_id, $old_status
 
 	if ( 0 == $order_id || 'refunded' !== $new_status ) return;
 
-	$refunds_obj = get_children([
+	$children = get_children([
 		'post_parent' => $order_id,
 		'post_type'   => 'shop_order_refund',
 		'numberposts' => -1,
 		'post_status' => 'any'
 	], OBJECT );
 
-	$refunds = array_values( $refunds_obj );
+	$refunds = array_values( $children );
 
-	$order_meta = get_post_meta( $order_id );
+	$meta = get_post_meta( $order_id );
+	
+	$first_name = ! empty( $meta['_billing_first_name'][0] ) ? ucfirst( $meta['_billing_first_name'][0] ) : '#' . $order_id;
+	$last_name  = ! empty( $meta['_billing_first_name'][0] ) && ! empty( $meta['_billing_last_name'][0] ) ? ucfirst( $meta['_billing_last_name'][0] ) : '';
+	$refunder   = get_the_author_meta( 'user_nicename', $refunds[0]->post_author );
 
 	$payload = [
 		'username'    => 'Tribe Refunds',
@@ -40,12 +44,12 @@ add_action( 'woocommerce_order_status_changed', function( $order_id, $old_status
 				'fields'     => [
 					[
 						'title' => 'Customer',
-						'value' => sprintf( '%s %s', ucfirst( $order_meta['_billing_first_name'][0] ), ucfirst( $order_meta['_billing_last_name'][0] ) ),
+						'value' => sprintf( '%s %s', $first_name, $last_name ),
 						'short' => true
 					],
 					[
 						'title' => 'Refunded By',
-						'value' => ucfirst( get_the_author_meta( 'user_nicename', $refunds[0]->post_author ) ),
+						'value' => ! empty( $refunder ) ? ucfirst( $refunder ) : 'Tribe',
 						'short' => true
 					]
 				]
